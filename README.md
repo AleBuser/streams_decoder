@@ -10,8 +10,8 @@ Make sure you also have the build dependencies installed, if not run:
 `sudo apt update`  
 
 
-## Installing XDK2Streams
-Download XDK2Streams:  
+## Installing streams_decoder
+Download streams_decoder server:  
 `git clone https://github.com/AleBuser/streams_decoder`  
 `cd streams_decoder`  
   
@@ -25,7 +25,7 @@ Set the *node* to a high-throughput node to make request response faster.
   
 Run the Server:  
 `cargo run --release`  
-This starts the server which will forward messages from the XDK to the Tangle  
+This starts the server  
 
 To decode a streams channel send the channel address in a GET request as raw data in the body, the endpoint is */decode_channel*:  
 `  
