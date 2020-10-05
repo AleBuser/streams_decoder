@@ -27,7 +27,7 @@ Run the Server:
 `cargo run --release`  
 This starts the server  
 
-To decode a streams channel send the channel address in a GET request as raw data in the body, the endpoint is */decode_channel*:  
+To decode a streams channel send the channel address in a GET request as *text/plain* in the body, the endpoint is */decode_channel*:  
 `  
 curl --location --request GET 'localhost:8585/decode_channel' \
 --header 'Content-Type: text/plain' \
