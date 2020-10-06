@@ -1,25 +1,30 @@
 use crate::iota_channels_lite::channel_subscriber::Channel;
 use crate::responses::response_list::ResponseList;
-use actix_web::{Error, HttpResponse};
+use actix_web::{Error, HttpResponse, HttpRequest};
 
 use anyhow::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::iota_channels_lite::Network;
 
-pub async fn decode_channel(data: Option<String>) -> Result<HttpResponse, Error> {
+pub async fn decode_channel(req: HttpRequest) -> Result<HttpResponse, Error> {
+    
+    let channel_root = req.match_info().get("channel_root");
+
+
     println!(
-        "GET /decode_channel -- {:?}",
+        "POST /decode_channel -- {:?}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
     );
-    match data {
+
+    match channel_root {
         Some(data) => {
             let mut subscriber: Channel = Channel::new(
                 Network::Main,
-                data,
+                data.to_string(),
                 "000000000000000000000000".to_string(),
                 None,
             );
