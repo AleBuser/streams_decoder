@@ -26,14 +26,22 @@ pub async fn decode_channel(req: HttpRequest) -> Result<HttpResponse, Error> {
             let mut subscriber: Channel =
                 Channel::new(Network::Main, address.to_string(), msg_id.to_string(), None);
 
-            subscriber.connect().unwrap();
+            match subscriber.connect() {
+                Ok(_) => {
+                    let msg_list = read_all_public(&mut subscriber).await.unwrap();
 
-            let msg_list = read_all_public(&mut subscriber).await.unwrap();
-
-            Ok(HttpResponse::Ok().json(ResponseList {
-                status: "Success".to_string(),
-                messages: msg_list,
-            }))
+                    return Ok(HttpResponse::Ok().json(ResponseList {
+                        status: "Success".to_string(),
+                        messages: msg_list,
+                    }));
+                }
+                Err(_) => {
+                    return Ok(HttpResponse::Ok().json(ResponseList {
+                        status: "Error: Could not connect to Tangle".to_string(),
+                        messages: vec![],
+                    }))
+                }
+            };
         }
         None => Ok(HttpResponse::Ok().json(format!("No thing!"))),
     }

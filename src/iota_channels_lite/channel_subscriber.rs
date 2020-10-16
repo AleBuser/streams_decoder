@@ -51,9 +51,14 @@ impl Channel {
         );
         let subscriber = Subscriber::new(&seed, "utf-8", PAYLOAD_BYTES, client);
 
+        let ann_link = match Address::from_str(&channel_address, &announcement_tag) {
+            Ok(v) => v,
+            Err(_) => Address::default(),
+        };
+
         Self {
             subscriber: subscriber,
-            announcement_link: Address::from_str(&channel_address, &announcement_tag).unwrap(),
+            announcement_link: ann_link,
             subscription_link: Address::default(),
             channel_address: channel_address,
         }
