@@ -3,14 +3,14 @@
 //!
 use super::Network;
 use crate::iota_channels_lite::utils::{payload::json::Payload, random_seed};
+
 use iota::client as iota_client;
-use iota_streams::app::transport::tangle::{client::RecvOptions, PAYLOAD_BYTES};
-use iota_streams::app::transport::Transport;
+use iota_streams::app::transport::tangle::{
+    client::{Client, SendTrytesOptions},
+    PAYLOAD_BYTES,
+};
 use iota_streams::app_channels::{
-    api::{
-        tangle::{Address, Subscriber},
-        SequencingState,
-    },
+    api::tangle::{Address, Subscriber},
     message,
 };
 
@@ -20,7 +20,7 @@ use anyhow::Result;
 /// Channel subscriber
 ///
 pub struct Channel {
-    subscriber: Subscriber,
+    subscriber: Subscriber<Client>,
     announcement_link: Address,
     subscription_link: Address,
     channel_address: String,
@@ -40,8 +40,16 @@ impl Channel {
             Some(seed) => seed,
             None => random_seed::new(),
         };
-        iota_client::Client::add_node(node.as_string()).unwrap();
-        let subscriber = Subscriber::new(&seed, "utf-8", PAYLOAD_BYTES);
+        let send_opt = SendTrytesOptions::default();
+        let client: Client = Client::new(
+            send_opt,
+            iota::client::ClientBuilder::new()
+                .node(&node.as_string())
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
+        let subscriber = Subscriber::new(&seed, "utf-8", PAYLOAD_BYTES, client);
 
         Self {
             subscriber: subscriber,
@@ -55,16 +63,8 @@ impl Channel {
     /// Connect
     ///
     pub fn connect(&mut self) -> Result<String> {
-        let message_list = iota_client::Client::get()
-            .recv_messages_with_options(&self.announcement_link, RecvOptions { flags: 0 })?;
-
-        for tx in message_list.iter() {
-            let header = tx.parse_header()?;
-            if header.check_content_type(message::ANNOUNCE) {
-                self.subscriber.unwrap_announcement(header.clone())?;
-                break;
-            }
-        }
+        self.subscriber
+            .receive_announcement(&self.announcement_link)?;
         Ok(self.subscription_link.msgid.to_string())
     }
     ///
@@ -77,24 +77,12 @@ impl Channel {
         let mut response: Vec<(Option<String>, Option<String>)> = Vec::new();
 
         let link = Address::from_str(&self.channel_address, &signed_packet_tag).unwrap();
-        let message_list = iota_client::Client::get()
-            .recv_messages_with_options(&link, RecvOptions { flags: 0 })?;
 
-        for tx in message_list.iter() {
-            let header = tx.parse_header()?;
-            if header.check_content_type(message::SIGNED_PACKET) {
-                match self.subscriber.unwrap_signed_packet(header.clone()) {
-                    Ok((_signer, unwrapped_public, _)) => {
-                        response.push((
-                            Payload::unwrap_data(&String::from_utf8(unwrapped_public.0).unwrap())
-                                .unwrap(),
-                            None, //Iot2Tanagle currently only support public masseges
-                        ));
-                    }
-                    Err(e) => println!("Signed Packet Error: {}", e),
-                }
-            }
-        }
+        let (_, public_payload, _) = self.subscriber.receive_signed_packet(&link)?;
+        response.push((
+            Payload::unwrap_data(&String::from_utf8(public_payload.0).unwrap()).unwrap(),
+            None, //Iot2Tanagle currently only support public masseges
+        ));
 
         Ok(response)
     }
@@ -102,38 +90,23 @@ impl Channel {
     ///
     /// Generates the next message in the channels
     ///
-    pub fn get_next_message(&mut self) -> Option<String> {
-        let ids = self.subscriber.gen_next_msg_ids(false);
+    pub fn get_next_message(&mut self) -> Option<Vec<String>> {
+        let mut ids: Vec<String> = vec![];
 
-        let mut tag: Option<String> = None;
+        let mut msgs = self.subscriber.fetch_next_msgs();
 
-        for (_pk, SequencingState(next_id, seq_num)) in ids.iter() {
-            let msg = iota_client::Client::get()
-                .recv_message_with_options(&next_id, RecvOptions { flags: 0 })
-                .ok();
-
-            if msg.is_none() {
-                continue;
-            }
-
-            let unwrapped = msg.unwrap();
-
-            loop {
-                let preparsed = unwrapped.parse_header().unwrap();
-                match preparsed.header.content_type.0 {
-                    message::SIGNED_PACKET => {
-                        let _unwrapped = self.subscriber.unwrap_signed_packet(preparsed.clone());
-                        tag = Some(next_id.msgid.to_string());
-                        break;
-                    }
-                    _ => {
-                        break;
-                    }
-                }
-            }
-            self.subscriber
-                .store_state_for_all(next_id.clone(), *seq_num);
+        for msg in &msgs {
+            ids.push(msg.link.msgid.to_string());
         }
-        tag
+
+        while !msgs.is_empty() {
+            msgs = self.subscriber.fetch_next_msgs();
+
+            for msg in &msgs {
+                ids.push(msg.link.msgid.to_string());
+            }
+        }
+
+        Some(ids)
     }
 }
