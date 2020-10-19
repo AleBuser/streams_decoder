@@ -1,4 +1,4 @@
 pub mod api;
-pub mod iota_channels_lite;
 pub mod responses;
+pub mod streams_subscriber;
 pub mod types;

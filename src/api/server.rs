@@ -1,14 +1,14 @@
-use actix_web::{web, App, HttpServer};
 use actix_cors::Cors;
-
+use actix_web::{web, App, HttpServer};
 
 use crate::api::handlers;
 
-pub async fn start(endpoint: String) -> std::io::Result<()> {
+pub async fn start(endpoint: String, node: String) -> std::io::Result<()> {
     println!("Started server at: {}", &endpoint);
     HttpServer::new(move || {
         App::new()
             .data(web::JsonConfig::default().limit(4096))
+            .data(node.clone())
             .wrap(
                 Cors::new()
                     .allowed_methods(vec!["POST", "GET"])
@@ -17,7 +17,8 @@ pub async fn start(endpoint: String) -> std::io::Result<()> {
                     .finish(),
             )
             .service(
-                web::resource("/decode_channel/{channel_root}").route(web::get().to(handlers::decode_channel)),
+                web::resource("/decode_channel/{channel_root}")
+                    .route(web::get().to(handlers::decode_channel)),
             )
     })
     .bind(endpoint)?

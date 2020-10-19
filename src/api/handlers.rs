@@ -1,13 +1,15 @@
-use crate::iota_channels_lite::channel_subscriber::Channel;
 use crate::responses::response_list::ResponseList;
-use actix_web::{Error, HttpRequest, HttpResponse};
+use crate::streams_subscriber::subscriber::Channel;
+
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 
 use anyhow::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::iota_channels_lite::Network;
-
-pub async fn decode_channel(req: HttpRequest) -> Result<HttpResponse, Error> {
+pub async fn decode_channel(
+    req: HttpRequest,
+    node: web::Data<String>,
+) -> Result<HttpResponse, Error> {
     let channel_root = req.match_info().get("channel_root");
 
     println!(
@@ -21,25 +23,45 @@ pub async fn decode_channel(req: HttpRequest) -> Result<HttpResponse, Error> {
     match channel_root {
         Some(data) => {
             let str_iter = data.split(":").collect::<Vec<&str>>();
+            if str_iter.len() != 2 {
+                return Ok(HttpResponse::Ok().json(ResponseList {
+                    status: "Error: Invalid Address".to_string(),
+                    messages: vec![],
+                }));
+            }
             let address = str_iter[0];
             let msg_id = str_iter[1];
-            let mut subscriber: Channel =
-                Channel::new(Network::Main, address.to_string(), msg_id.to_string(), None);
+            let mut subscriber: Channel = Channel::new(
+                node.clone().to_string(),
+                address.to_string(),
+                msg_id.to_string(),
+                None,
+            );
 
             match subscriber.connect() {
                 Ok(_) => {
-                    let msg_list = read_all_public(&mut subscriber).await.unwrap();
+                    let msg_list = match read_all_public(&mut subscriber).await {
+                        Ok(list) => Some(list),
+                        Err(_) => None,
+                    };
+
+                    if msg_list.is_none() {
+                        return Ok(HttpResponse::Ok().json(ResponseList {
+                            status: "Error: Could not Find Messages".to_string(),
+                            messages: vec![],
+                        }));
+                    }
 
                     return Ok(HttpResponse::Ok().json(ResponseList {
                         status: "Success".to_string(),
-                        messages: msg_list,
+                        messages: msg_list.unwrap(),
                     }));
                 }
-                Err(_) => {
+                Err(e) => {
                     return Ok(HttpResponse::Ok().json(ResponseList {
-                        status: "Error: Could not connect to Tangle".to_string(),
+                        status: format!("Error: {}", e.to_string()),
                         messages: vec![],
-                    }))
+                    }));
                 }
             };
         }
@@ -48,12 +70,12 @@ pub async fn decode_channel(req: HttpRequest) -> Result<HttpResponse, Error> {
 }
 
 async fn read_all_public(subscriber: &mut Channel) -> Result<Vec<String>> {
-    let tag_list = subscriber.get_next_message().unwrap();
+    let tag_list = subscriber.get_next_message();
 
     let mut msg_list: Vec<String> = vec![];
     for signed_message_tag in tag_list {
         let msgs: Vec<(Option<String>, Option<String>)> =
-            subscriber.read_signed(signed_message_tag).unwrap();
+            subscriber.read_signed(signed_message_tag)?;
         for (msg_p, _msg_m) in msgs {
             match msg_p {
                 None => continue,

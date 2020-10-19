@@ -7,8 +7,9 @@ use std::fs::File;
 async fn main() -> std::io::Result<()> {
     let config: Config = serde_json::from_reader(File::open("config.json").unwrap()).unwrap();
     let endpoint = config.endpoint;
+    let node = config.node;
 
     println!("Starting....");
 
-    server::start(endpoint).await
+    server::start(endpoint, node).await
 }
