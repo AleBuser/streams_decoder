@@ -1,13 +1,12 @@
-//!
-//! To Generate a new Random Seed
-//!
+pub mod subscriber;
+
 extern crate rand;
 use rand::Rng;
 
 ///
 /// Generates a new random String of 81 Chars of A..Z and 9
 ///
-pub fn new() -> String {
+pub fn random_seed() -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ9";
     const SEED_LEN: usize = 81;
     let mut rng = rand::thread_rng();
